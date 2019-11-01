@@ -49,8 +49,8 @@ Scoreboard::Scoreboard(Vector2f posLeft, Vector2f posRight) {
 	this->rightScoreText = Text("0", this->font, 30);
 	this->leftScoreText.setPosition(posLeft);
 	this->rightScoreText.setPosition(posRight);
-	this->leftScoreText.setFillColor(sf::Color::Red);
-	this->rightScoreText.setFillColor(sf::Color::Red);
+	this->leftScoreText.setFillColor(sf::Color::White);
+	this->rightScoreText.setFillColor(sf::Color::White);
 	this->leftScoreText.setStyle(sf::Text::Bold);
 	this->rightScoreText.setStyle(sf::Text::Bold);
 }
@@ -82,19 +82,29 @@ void Scoreboard::reset() {
 
 class Paddle {
 public:
+	// constructors, default pos is (0,0)
 	Paddle();
 	Paddle(Vector2f position);
-	void draw(RenderWindow* window);
-	void update(float dt, bool down, bool up);
+
+	// accessors and mutators
 	Vector2f getPosition();
 	Vector2f getSize();
-	void flash();
+	void setAi(bool toSet);
+
+	// render function
+	void draw(RenderWindow* window);
+
+	// update functions
+	void setVelocityPlayer(float dt, bool down, bool up);
+	void setVelocityAi(float dt, Vector2f bp);
+	void updateDelegator(float dt, bool down, bool up, Vector2f bp);
 private:
 	float velocity_y;
 	Vector2f position;
 	RectangleShape shape;
 	float height;
 	float baseVelocity;
+	bool ai;
 };
 
 Paddle::Paddle(Vector2f position) {
@@ -106,34 +116,17 @@ Paddle::Paddle(Vector2f position) {
 	this->position = position;
 	this->velocity_y = 0.0f;
 	this->baseVelocity = 0.5f;
+
+	// set up ai
+	this->ai = false;
 }
 
 Paddle::Paddle() {
 	Paddle::Paddle(Vector2f(0.0f, 0.0f));
 }
 
-void Paddle::flash() {
-	if (this->shape.getFillColor() == Color::White) {
-		this->shape.setFillColor(Color::Green);
-	}
-	else if (this->shape.getFillColor() == Color::Green) {
-		this->shape.setFillColor(Color::Magenta);
-	}
-	else if (this->shape.getFillColor() == Color::Magenta) {
-		this->shape.setFillColor(Color::Cyan);
-	}
-	else if (this->shape.getFillColor() == Color::Cyan) {
-		this->shape.setFillColor(Color::Yellow);
-	}
-	else if (this->shape.getFillColor() == Color::Yellow) {
-		this->shape.setFillColor(Color::Red);
-	}
-	else if (this->shape.getFillColor() == Color::Red) {
-		this->shape.setFillColor(Color::Blue);
-	}
-	else if (this->shape.getFillColor() == Color::Blue) {
-		this->shape.setFillColor(Color::White);
-	}
+void Paddle::setAi(bool toSet) {
+	this->ai = toSet;
 }
 
 Vector2f Paddle::getPosition() {
@@ -144,18 +137,15 @@ Vector2f Paddle::getSize() {
 	return this->shape.getSize();
 }
 
-void Paddle::update(float dt, bool down, bool up) {
-	if (down && up || !down && !up) {
-		// no buttons or both buttons -> no net change
-		this->velocity_y = 0.0f;
+// delegates to player OR AI function and then updates
+void Paddle::updateDelegator(float dt, bool down, bool up, Vector2f bp) { 
+	if (this->ai) { // if this is an AI paddle
+		setVelocityAi(dt, bp);
 	}
-	else if (down) {
-		this->velocity_y = this->baseVelocity;
+	else { // this is a player paddle
+		setVelocityPlayer(dt, down, up);
 	}
-	else if (up) {
-		this->velocity_y = -1 * this->baseVelocity;
-	}
-	
+
 	// update position based on velocity
 	this->position.y += this->velocity_y * dt;
 
@@ -165,6 +155,34 @@ void Paddle::update(float dt, bool down, bool up) {
 	}
 	else if (this->position.y < 0) {
 		this->position.y = 0;
+	}
+}
+
+void Paddle::setVelocityAi(float dt, Vector2f bp) {
+	// position of center of the paddle (y)
+
+	if (bp.y > this->position.y + this->height) {
+		this->velocity_y = this->baseVelocity;
+	}
+	else if (bp.y < this->position.y) {
+		this->velocity_y = -1 * this->baseVelocity;
+	}
+	else {
+		this->velocity_y = 0.0f;
+	}
+}
+
+void Paddle::setVelocityPlayer(float dt, bool down, bool up) {
+	// set velocity on bools
+	if (down && up || !(down || up)) {
+		// no buttons or both buttons gives no net change
+		this->velocity_y = 0.0f;
+	}
+	else if (down) {
+		this->velocity_y = this->baseVelocity;
+	}
+	else if (up) {
+		this->velocity_y = -1 * this->baseVelocity;
 	}
 }
 
@@ -179,12 +197,14 @@ public:
 	Ball(Vector2f position, Vector2f velocity);
 	void draw(RenderWindow* window);
 	int update(float dt);
-	void flipVelocity();
+	void bounce();
 	Vector2f getPosition();
+	void setPosition(Vector2f newPosition);
 	float getRadius();
 	void setRadius(float newrad);
 private:
 	Vector2f velocity;
+	Vector2f basevelocity;
 	Vector2f position;
 	CircleShape shape;
 	float radius;
@@ -199,13 +219,18 @@ Ball::Ball(Vector2f position, Vector2f velocity) {
 
 	// set up position and velocity
 	this->position = position;
-	this->velocity = velocity;
+	this->basevelocity = velocity;
+	this->velocity = this->basevelocity;
 
 	this->colorCycleCount = 10;
 }
 
 Ball::Ball() {
 	Ball::Ball(Vector2f(0.0f, 0.0f), Vector2f(0.0f, 0.0f));
+}
+
+void Ball::setPosition(Vector2f newPosition) {
+	this->position = newPosition;
 }
 
 void Ball::setRadius(float newrad) {
@@ -215,8 +240,8 @@ void Ball::setRadius(float newrad) {
 	this->shape.setRadius(this->radius);
 }
 
-void Ball::flipVelocity() {
-	this->velocity *= -1.0f;
+void Ball::bounce() {
+	this->velocity.x *= -1.1f;
 }
 
 int Ball::update(float dt) {
@@ -226,24 +251,7 @@ int Ball::update(float dt) {
 	// kooky colors
 	if (this->colorCycleCount > 3) {
 		this->colorCycleCount = 0;
-		if (this->shape.getFillColor() == Color::Blue) {
-			this->shape.setFillColor(Color::Green);
-		}
-		else if (this->shape.getFillColor() == Color::Green) {
-			this->shape.setFillColor(Color::Magenta);
-		}
-		else if (this->shape.getFillColor() == Color::Magenta) {
-			this->shape.setFillColor(Color::Cyan);
-		}
-		else if (this->shape.getFillColor() == Color::Cyan) {
-			this->shape.setFillColor(Color::Yellow);
-		}
-		else if (this->shape.getFillColor() == Color::Yellow) {
-			this->shape.setFillColor(Color::Red);
-		}
-		else if (this->shape.getFillColor() == Color::Red) {
-			this->shape.setFillColor(Color::Blue);
-		}
+		this->shape.setFillColor(Color(rand(), rand(), rand()));
 	}
 	else {
 		this->colorCycleCount++;
@@ -253,12 +261,14 @@ int Ball::update(float dt) {
 	if (this->position.x > WINDOW_WIDTH) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
+		this->velocity = this->basevelocity;
 		return 1;
 
 	}
 	else if (this->position.x + 2 * this->radius < 0) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
+		this->velocity = this->basevelocity;
 		return -1;
 	}
 
@@ -334,6 +344,21 @@ int main()
 	window.setVerticalSyncEnabled(true); // vsync bc why not
 	window.setKeyRepeatEnabled(false); // remove repeated key events
 
+	// music and sfx
+	sf::SoundBuffer sfx_impact_buffer;
+	if (!sfx_impact_buffer.loadFromFile("impact.wav")) {
+		exit(-1);
+	}
+	sf::Sound sfx_impact;
+	sfx_impact.setBuffer(sfx_impact_buffer);
+
+	Music music;
+	if (!music.openFromFile("pongdraft02.wav")) {
+		exit(-1);
+	}
+	music.setLoop(true);
+	music.play();
+
 	Clock clock; // init clock
 	float dt_ms = 0;
 
@@ -345,13 +370,14 @@ int main()
 	// board setup
 	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
 	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2, 0));
-	midLine.setFillColor(Color(255, 0, 0, 255));
+	midLine.setFillColor(Color(255, 255, 255, 255));
 
 	// initialize game objects
-	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f), Vector2f(0.3f, 0.2f));
-	Paddle paddle(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f));
-	Paddle paddle2(Vector2f(15.0, WINDOW_HEIGHT / 2.0f));
 	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2 - 100.0f, 20.0f), Vector2f(WINDOW_WIDTH / 2 + 100.0f, 20.0f));
+	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f), Vector2f(0.3f, 0.2f));
+	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f));
+	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f));
+	paddleLeft.setAi(true);
 	
 	while (window.isOpen()) // overall game loop
 	{
@@ -384,20 +410,20 @@ int main()
 		}
 
 		// update functions
-		if (collisionRectangle(ball, paddle)) {
-			ball.flipVelocity();
-			//ball.setRadius(ball.getRadius() - 5);
-			paddle.flash();
+		if (collisionRectangle(ball, paddleRight)) {
+			ball.bounce();
+			ball.setPosition(Vector2f(paddleRight.getPosition().x - ball.getRadius() - 1.0f, ball.getPosition().y));
+			sfx_impact.play();
 		}
-		if (collisionRectangle(ball, paddle2)) {
-			ball.flipVelocity();
-			//ball.setRadius(ball.getRadius() - 5);
-			paddle2.flash();
+		if (collisionRectangle(ball, paddleLeft)) {
+			ball.bounce();
+			ball.setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + ball.getRadius() + 1.0f, ball.getPosition().y));
+			sfx_impact.play();	
 		}
 
 		offScreen = ball.update(dt_ms); // update the movement of the ball
-		paddle.update(dt_ms, downKeyPressed, upKeyPressed);
-		paddle2.update(dt_ms, downKeyPressed, upKeyPressed);
+		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition());
+		paddleLeft.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition());
 		
 		// scoring
 		if (offScreen < 0) {
@@ -412,12 +438,12 @@ int main()
 		window.draw(midLine);
 		scoreboard.draw(&window);
 		ball.draw(&window); // draw updated game objects
-		paddle.draw(&window);
-		paddle2.draw(&window);
+		paddleRight.draw(&window);
+		paddleLeft.draw(&window);
 		
-
 		window.display(); // draw the new screen
 	}
 
+	music.stop();
 	return 0;
 }
