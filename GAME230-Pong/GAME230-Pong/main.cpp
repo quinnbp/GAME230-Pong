@@ -8,12 +8,77 @@
 
 #include<vector>
 #include<cmath>
+#include<iostream>
+#include<string>
 
 using namespace std;
 using namespace sf;
 
 const int WINDOW_WIDTH = 1024;
 const int WINDOW_HEIGHT = 512;
+
+class Scoreboard {
+public:
+	Scoreboard(Vector2f posLeft, Vector2f posRight);
+	void draw(RenderWindow* window);
+	void update(int scoreRight, int scoreleft);
+	void reset();
+private:
+	int leftScore;
+	int rightScore;
+	Text leftScoreText;
+	Text rightScoreText;
+	Vector2f positionLeft;
+	Vector2f positionRight;
+	Font font;
+};
+
+Scoreboard::Scoreboard(Vector2f posLeft, Vector2f posRight) {
+	this->leftScore = 0;
+	this->rightScore = 0;
+
+	sf::Font fontLoader;
+	if (!fontLoader.loadFromFile("arial.ttf"))
+	{
+		std::exit(-1);
+	}
+
+	this->font = fontLoader;
+
+	this->leftScoreText = Text("0", this->font, 30);
+	this->rightScoreText = Text("0", this->font, 30);
+	this->leftScoreText.setPosition(posLeft);
+	this->rightScoreText.setPosition(posRight);
+	this->leftScoreText.setFillColor(sf::Color::Red);
+	this->rightScoreText.setFillColor(sf::Color::Red);
+	this->leftScoreText.setStyle(sf::Text::Bold);
+	this->rightScoreText.setStyle(sf::Text::Bold);
+}
+
+void Scoreboard::draw(RenderWindow* window) {
+	window->draw(this->leftScoreText);
+	window->draw(this->rightScoreText);
+}
+
+void Scoreboard::update(int scoreLeft, int scoreRight) {
+	// update score ints
+	this->leftScore += scoreLeft;
+	this->rightScore += scoreRight;
+
+	// change  text to reflect change
+	this->leftScoreText.setString(to_string(this->leftScore));
+	this->rightScoreText.setString(to_string(this->rightScore));
+}
+
+void Scoreboard::reset() {
+	// update score ints
+	this->leftScore = 0;
+	this->rightScore = 0;
+
+	// change  text to reflect change
+	this->leftScoreText.setString(to_string(this->leftScore));
+	this->rightScoreText.setString(to_string(this->rightScore));
+}
 
 class Paddle {
 public:
@@ -40,7 +105,7 @@ Paddle::Paddle(Vector2f position) {
 	// set up pos and velocity
 	this->position = position;
 	this->velocity_y = 0.0f;
-	this->baseVelocity = 0.3f;
+	this->baseVelocity = 0.5f;
 }
 
 Paddle::Paddle() {
@@ -113,10 +178,11 @@ public:
 	Ball();
 	Ball(Vector2f position, Vector2f velocity);
 	void draw(RenderWindow* window);
-	void update(float dt);
+	int update(float dt);
 	void flipVelocity();
 	Vector2f getPosition();
 	float getRadius();
+	void setRadius(float newrad);
 private:
 	Vector2f velocity;
 	Vector2f position;
@@ -127,7 +193,7 @@ private:
 
 Ball::Ball(Vector2f position, Vector2f velocity) {
 	// set up shape
-	this->radius = 10;
+	this->radius = 5;
 	this->shape = CircleShape(this->radius);
 	this->shape.setFillColor(Color::Blue);
 
@@ -142,11 +208,18 @@ Ball::Ball() {
 	Ball::Ball(Vector2f(0.0f, 0.0f), Vector2f(0.0f, 0.0f));
 }
 
+void Ball::setRadius(float newrad) {
+	if (newrad > 1) {
+		this->radius = newrad;
+	}
+	this->shape.setRadius(this->radius);
+}
+
 void Ball::flipVelocity() {
 	this->velocity *= -1.0f;
 }
 
-void Ball::update(float dt) {
+int Ball::update(float dt) {
 	this->position.x += this->velocity.x * dt;
 	this->position.y += this->velocity.y * dt;
 
@@ -177,11 +250,17 @@ void Ball::update(float dt) {
 	}
 
 	// check x bounds
-	if (this->position.x > WINDOW_WIDTH - 2 * this->radius || this->position.x < 0) {
+	if (this->position.x > WINDOW_WIDTH) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
-		// randomize velocity here
-	} 
+		return 1;
+
+	}
+	else if (this->position.x + 2 * this->radius < 0) {
+		this->position.x = WINDOW_WIDTH / 2;
+		this->position.y = WINDOW_HEIGHT / 2;
+		return -1;
+	}
 
 	// check y bounds
 	if (this->position.y > WINDOW_HEIGHT - 2 * this->radius) {
@@ -192,6 +271,8 @@ void Ball::update(float dt) {
 		this->position.y = 0;
 		this->velocity.y *= -1;
 	}
+
+	return 0;
 }
 
 void Ball::draw(RenderWindow* window) {
@@ -207,8 +288,7 @@ float Ball::getRadius() {
 	return this->radius;
 }
 
-
-bool collision(Ball ball, Paddle paddle) { // checks if a ball and paddle collided
+bool collisionRectangle(Ball ball, Paddle paddle) { // checks if a ball and paddle collided
 	Vector2f bp = ball.getPosition();
 	float br = ball.getRadius();
 	Vector2f pp = paddle.getPosition();
@@ -260,11 +340,19 @@ int main()
 	// key booleans
 	bool upKeyPressed = false;
 	bool downKeyPressed = false;
+	int offScreen = 0;
 
-	Ball ball(Vector2f(100.0f, 300.0f), Vector2f(0.5f, 0.3f)); // initialize game objects
-	Paddle paddle(Vector2f(WINDOW_WIDTH - 15.0f, 200.0f));
-	Paddle paddle2(Vector2f(15.0, 200.0f));
+	// board setup
+	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
+	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2, 0));
+	midLine.setFillColor(Color(255, 0, 0, 255));
 
+	// initialize game objects
+	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f), Vector2f(0.3f, 0.2f));
+	Paddle paddle(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f));
+	Paddle paddle2(Vector2f(15.0, WINDOW_HEIGHT / 2.0f));
+	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2 - 100.0f, 20.0f), Vector2f(WINDOW_WIDTH / 2 + 100.0f, 20.0f));
+	
 	while (window.isOpen()) // overall game loop
 	{
 		// Timing
@@ -296,24 +384,37 @@ int main()
 		}
 
 		// update functions
-		if (collision(ball, paddle)) {
+		if (collisionRectangle(ball, paddle)) {
 			ball.flipVelocity();
+			//ball.setRadius(ball.getRadius() - 5);
 			paddle.flash();
 		}
-		if (collision(ball, paddle2)) {
+		if (collisionRectangle(ball, paddle2)) {
 			ball.flipVelocity();
+			//ball.setRadius(ball.getRadius() - 5);
 			paddle2.flash();
 		}
 
-		ball.update(dt_ms); // update the movement of the ball
+		offScreen = ball.update(dt_ms); // update the movement of the ball
 		paddle.update(dt_ms, downKeyPressed, upKeyPressed);
 		paddle2.update(dt_ms, downKeyPressed, upKeyPressed);
+		
+		// scoring
+		if (offScreen < 0) {
+			scoreboard.update(0, 1);
+		}
+		else if (offScreen > 0) {
+			scoreboard.update(1, 0);
+		}
 
 		// draw functions
-		window.clear(); // clear to black (no epilepsy warnings)
+		window.clear(Color(0, 0, 0, 255)); // clear to black (no epilepsy warnings)
+		window.draw(midLine);
+		scoreboard.draw(&window);
 		ball.draw(&window); // draw updated game objects
 		paddle.draw(&window);
 		paddle2.draw(&window);
+		
 
 		window.display(); // draw the new screen
 	}
