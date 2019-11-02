@@ -17,6 +17,8 @@ using namespace sf;
 const int WINDOW_WIDTH = 1024;
 const int WINDOW_HEIGHT = 512;
 
+const float PI = 3.14159265358979323846264338;
+
 class Scoreboard {
 public:
 	Scoreboard(Vector2f posLeft, Vector2f posRight);
@@ -115,7 +117,7 @@ Paddle::Paddle(Vector2f position) {
 	// set up pos and velocity
 	this->position = position;
 	this->velocity_y = 0.0f;
-	this->baseVelocity = 0.5f;
+	this->baseVelocity = 0.4f;
 
 	// set up ai
 	this->ai = false;
@@ -160,12 +162,16 @@ void Paddle::updateDelegator(float dt, bool down, bool up, Vector2f bp) {
 
 void Paddle::setVelocityAi(float dt, Vector2f bp) {
 	// position of center of the paddle (y)
-
-	if (bp.y > this->position.y + this->height) {
-		this->velocity_y = this->baseVelocity;
-	}
-	else if (bp.y < this->position.y) {
-		this->velocity_y = -1 * this->baseVelocity;
+	if (bp.x < WINDOW_WIDTH / 2.0f) {
+		if (bp.y > this->position.y + this->height) {
+			this->velocity_y = this->baseVelocity;
+		}
+		else if (bp.y < this->position.y) {
+			this->velocity_y = -1 * this->baseVelocity;
+		}
+		else {
+			this->velocity_y = 0.0f;
+		}
 	}
 	else {
 		this->velocity_y = 0.0f;
@@ -194,24 +200,27 @@ void Paddle::draw(RenderWindow* window) {
 class Ball {
 public:
 	Ball();
-	Ball(Vector2f position, Vector2f velocity);
+	Ball(Vector2f position);
 	void draw(RenderWindow* window);
 	int update(float dt);
-	void bounce();
+	void bounce(Paddle p);
 	Vector2f getPosition();
 	void setPosition(Vector2f newPosition);
 	float getRadius();
 	void setRadius(float newrad);
+	void randomizeStartVelocity();
 private:
 	Vector2f velocity;
-	Vector2f basevelocity;
+	float baseSpeed;
 	Vector2f position;
 	CircleShape shape;
 	float radius;
 	int colorCycleCount; // for flashing ball
+	Texture ballTexture;
+	Sprite sprite;
 };
 
-Ball::Ball(Vector2f position, Vector2f velocity) {
+Ball::Ball(Vector2f position) {
 	// set up shape
 	this->radius = 5;
 	this->shape = CircleShape(this->radius);
@@ -219,14 +228,40 @@ Ball::Ball(Vector2f position, Vector2f velocity) {
 
 	// set up position and velocity
 	this->position = position;
-	this->basevelocity = velocity;
-	this->velocity = this->basevelocity;
+	this->baseSpeed = 0.4;
+	this->randomizeStartVelocity();
 
 	this->colorCycleCount = 10;
+
+	// ball texture
+	sf::Texture texture;
+	if (!texture.loadFromFile("ball.png"))
+	{
+		exit(-1);
+	}
+	this->ballTexture = texture;
+	this->ballTexture.setSmooth(true);
+	this->sprite = Sprite(this->ballTexture);
+	this->sprite.setScale(0.1f, 0.1f);
 }
 
 Ball::Ball() {
-	Ball::Ball(Vector2f(0.0f, 0.0f), Vector2f(0.0f, 0.0f));
+	Ball::Ball(Vector2f(0.0f, 0.0f));
+}
+
+void Ball::randomizeStartVelocity() {
+	float theta = rand() % 11; // rand 1-10
+	theta = (theta / 10) * (PI / 4.0f); // rand 0-Pi/4
+	float newX = cos(theta) * this->baseSpeed;
+	float newY = sin(theta) * this->baseSpeed;
+
+	int flip = rand() % 2; // 50% chance to flip y
+	if (flip == 0) {
+		newY *= -1;
+	}
+
+	// velocity alwasy points to right
+	this->velocity = Vector2f(newX, newY);
 }
 
 void Ball::setPosition(Vector2f newPosition) {
@@ -240,8 +275,18 @@ void Ball::setRadius(float newrad) {
 	this->shape.setRadius(this->radius);
 }
 
-void Ball::bounce() {
-	this->velocity.x *= -1.1f;
+void Ball::bounce(Paddle p) {
+	// flip x
+	this->velocity.x *= -1.0f;
+	// accelerate
+	this->velocity.x *= 1.1f;
+	this->velocity.y *= 1.1f;
+	// change angle
+	float midP = p.getPosition().y + p.getSize().y / 2.0f; // midpoint of the paddle (y)
+	float spread = abs(midP - this->position.y) / 2.0f; // distance from midpoint to collision over 2 (y)
+	float scaleFactor = spread / p.getSize().y + 1.0f; // ratio of distance to paddle height + 1
+	this->velocity.y *= scaleFactor; // scale y by ratio
+	this->velocity.x *= 1.0f / scaleFactor; // reduce x by ratio (to maintain overall speed)
 }
 
 int Ball::update(float dt) {
@@ -261,14 +306,14 @@ int Ball::update(float dt) {
 	if (this->position.x > WINDOW_WIDTH) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
-		this->velocity = this->basevelocity;
+		this->randomizeStartVelocity();	
 		return 1;
 
 	}
 	else if (this->position.x + 2 * this->radius < 0) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
-		this->velocity = this->basevelocity;
+		this->randomizeStartVelocity();
 		return -1;
 	}
 
@@ -287,7 +332,9 @@ int Ball::update(float dt) {
 
 void Ball::draw(RenderWindow* window) {
 	this->shape.setPosition(this->position);
+	this->sprite.setPosition(this->position);
 	window->draw(this->shape);
+	//window->draw(this->sprite);
 }
 
 Vector2f Ball::getPosition() {
@@ -368,15 +415,23 @@ int main()
 	int offScreen = 0;
 
 	// board setup
+	sf::Texture bg_texture;
+	if (!bg_texture.loadFromFile("spacebg2.png"))
+	{
+		exit(-1);
+	}
+	Sprite background = Sprite(bg_texture);
+	background.setPosition(0.0f, 0.0f);
+
 	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
 	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2, 0));
 	midLine.setFillColor(Color(255, 255, 255, 255));
 
 	// initialize game objects
 	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2 - 100.0f, 20.0f), Vector2f(WINDOW_WIDTH / 2 + 100.0f, 20.0f));
-	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f), Vector2f(0.3f, 0.2f));
-	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f));
-	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f));
+	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
+	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
+	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
 	paddleLeft.setAi(true);
 	
 	while (window.isOpen()) // overall game loop
@@ -411,12 +466,12 @@ int main()
 
 		// update functions
 		if (collisionRectangle(ball, paddleRight)) {
-			ball.bounce();
+			ball.bounce(paddleRight);
 			ball.setPosition(Vector2f(paddleRight.getPosition().x - ball.getRadius() - 1.0f, ball.getPosition().y));
 			sfx_impact.play();
 		}
-		if (collisionRectangle(ball, paddleLeft)) {
-			ball.bounce();
+		else if (collisionRectangle(ball, paddleLeft)) {
+			ball.bounce(paddleLeft);
 			ball.setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + ball.getRadius() + 1.0f, ball.getPosition().y));
 			sfx_impact.play();	
 		}
@@ -435,6 +490,7 @@ int main()
 
 		// draw functions
 		window.clear(Color(0, 0, 0, 255)); // clear to black (no epilepsy warnings)
+		window.draw(background);
 		window.draw(midLine);
 		scoreboard.draw(&window);
 		ball.draw(&window); // draw updated game objects
