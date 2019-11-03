@@ -345,11 +345,15 @@ float Ball::getRadius() {
 	return this->radius;
 }
 
-bool collisionRectangle(Ball ball, Paddle paddle) { // checks if a ball and paddle collided
-	Vector2f bp = ball.getPosition();
-	float br = ball.getRadius();
-	Vector2f pp = paddle.getPosition();
-	Vector2f ps = paddle.getSize();
+bool collisionLine(Vector2f bp, Vector2f pp) {
+	return true;
+}
+
+bool collisionRectangle(Ball *ball, Paddle *paddle) { // checks if a ball and paddle collided
+	Vector2f bp = ball->getPosition();
+	float br = ball->getRadius();
+	Vector2f pp = paddle->getPosition();
+	Vector2f ps = paddle->getSize();
 
 	float testX = bp.x;
 	float testY = bp.y;
@@ -465,20 +469,21 @@ int main()
 		}
 
 		// update functions
-		if (collisionRectangle(ball, paddleRight)) {
-			ball.bounce(paddleRight);
-			ball.setPosition(Vector2f(paddleRight.getPosition().x - ball.getRadius() - 1.0f, ball.getPosition().y));
-			sfx_impact.play();
-		}
-		else if (collisionRectangle(ball, paddleLeft)) {
-			ball.bounce(paddleLeft);
-			ball.setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + ball.getRadius() + 1.0f, ball.getPosition().y));
-			sfx_impact.play();	
-		}
-
 		offScreen = ball.update(dt_ms); // update the movement of the ball
 		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition());
 		paddleLeft.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition());
+
+		// collision check
+		if (collisionRectangle(&ball, &paddleRight)) {
+			ball.bounce(paddleRight);
+			ball.setPosition(Vector2f(paddleRight.getPosition().x - 2 * ball.getRadius() - 1.0f, ball.getPosition().y));
+			sfx_impact.play();
+		}
+		else if (collisionRectangle(&ball, &paddleLeft)) {
+			ball.bounce(paddleLeft);
+			ball.setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + 1.0f, ball.getPosition().y));
+			sfx_impact.play();	
+		}
 		
 		// scoring
 		if (offScreen < 0) {
@@ -489,17 +494,18 @@ int main()
 		}
 
 		// draw functions
-		window.clear(Color(0, 0, 0, 255)); // clear to black (no epilepsy warnings)
-		window.draw(background);
+		window.clear(Color(0, 0, 0, 255)); // clear to black
+		window.draw(background); // draw static board objects
 		window.draw(midLine);
-		scoreboard.draw(&window);
-		ball.draw(&window); // draw updated game objects
+
+		scoreboard.draw(&window); // draw updated game objects 
+		ball.draw(&window); 
 		paddleRight.draw(&window);
 		paddleLeft.draw(&window);
 		
-		window.display(); // draw the new screen
+		window.display(); // show the new screen
 	}
 
-	music.stop();
+	music.stop(); // cut music on exit
 	return 0;
 }
