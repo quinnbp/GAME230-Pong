@@ -17,7 +17,7 @@ using namespace sf;
 const int WINDOW_WIDTH = 1024;
 const int WINDOW_HEIGHT = 512;
 
-const float PI = 3.14159265358979323846264338;
+const double PI = 3.14159265358979323846264388;
 
 class Scoreboard {
 public:
@@ -161,8 +161,8 @@ void Paddle::updateDelegator(float dt, bool down, bool up, Vector2f bp) {
 }
 
 void Paddle::setVelocityAi(float dt, Vector2f bp) {
-	// position of center of the paddle (y)
-	if (bp.x < WINDOW_WIDTH / 2.0f) {
+	float distanceToBall = abs(this->position.x - bp.x);
+	if (distanceToBall < WINDOW_WIDTH / 2.0f) {
 		if (bp.y > this->position.y + this->height) {
 			this->velocity_y = this->baseVelocity;
 		}
@@ -228,7 +228,7 @@ Ball::Ball(Vector2f position) {
 
 	// set up position and velocity
 	this->position = position;
-	this->baseSpeed = 0.4;
+	this->baseSpeed = 0.4f;
 	this->randomizeStartVelocity();
 
 	this->colorCycleCount = 10;
@@ -250,15 +250,20 @@ Ball::Ball() {
 }
 
 void Ball::randomizeStartVelocity() {
-	float theta = rand() % 11; // rand 1-10
+	float theta = rand() % 11 + 1; // rand 1-10
 	theta = (theta / 10) * (PI / 4.0f); // rand 0-Pi/4
 	float newX = cos(theta) * this->baseSpeed;
 	float newY = sin(theta) * this->baseSpeed;
 
-	int flip = rand() % 2; // 50% chance to flip y
-	if (flip == 0) {
+	int flipY = rand() % 2; // 50% chance to flip y
+	if (flipY == 0) {
 		newY *= -1;
 	}
+	int flipX = rand() % 2; // 50% chance to flip x (shoot at other player)
+	if (flipX == 0) {
+		newX *= -1;
+	}
+
 
 	// velocity alwasy points to right
 	this->velocity = Vector2f(newX, newY);
@@ -278,15 +283,15 @@ void Ball::setRadius(float newrad) {
 void Ball::bounce(Paddle p) {
 	// flip x
 	this->velocity.x *= -1.0f;
-	// accelerate
-	this->velocity.x *= 1.1f;
-	this->velocity.y *= 1.1f;
 	// change angle
 	float midP = p.getPosition().y + p.getSize().y / 2.0f; // midpoint of the paddle (y)
-	float spread = abs(midP - this->position.y) / 2.0f; // distance from midpoint to collision over 2 (y)
+	float spread = abs(midP - this->position.y); // distance from midpoint to collision over 2 (y)
 	float scaleFactor = spread / p.getSize().y + 1.0f; // ratio of distance to paddle height + 1
 	this->velocity.y *= scaleFactor; // scale y by ratio
 	this->velocity.x *= 1.0f / scaleFactor; // reduce x by ratio (to maintain overall speed)
+	// accelerate
+	this->velocity.x *= 1.1f;
+	this->velocity.y *= 1.1f;
 }
 
 int Ball::update(float dt) {
@@ -345,7 +350,7 @@ float Ball::getRadius() {
 	return this->radius;
 }
 
-bool collisionLine(Vector2f bp, Vector2f pp) {
+bool collisionLine(Vector2f bp, Vector2f pp) { // TODO: use line collision option?
 	return true;
 }
 
@@ -395,7 +400,7 @@ int main()
 	window.setVerticalSyncEnabled(true); // vsync bc why not
 	window.setKeyRepeatEnabled(false); // remove repeated key events
 
-	// music and sfx
+	// set up music and sfx
 	sf::SoundBuffer sfx_impact_buffer;
 	if (!sfx_impact_buffer.loadFromFile("impact.wav")) {
 		exit(-1);
@@ -416,7 +421,21 @@ int main()
 	// key booleans
 	bool upKeyPressed = false;
 	bool downKeyPressed = false;
+	bool wKeyPressed = false;
+	bool sKeyPressed = false;
 	int offScreen = 0;
+
+	// menu setup
+	sf::Font fontLoader;
+	if (!fontLoader.loadFromFile("arial.ttf"))
+	{
+		std::exit(-1);
+	}
+	Text menuText;
+	menuText.setFont(fontLoader);
+	menuText.setString("[1] Play vs A.I.\n[2] Play vs Human\n[3] Demo mode\n[4] Exit");
+	menuText.setFillColor(Color::White);
+	menuText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 100.0f, WINDOW_HEIGHT / 2.0f - 80.0f));
 
 	// board setup
 	sf::Texture bg_texture;
@@ -426,7 +445,6 @@ int main()
 	}
 	Sprite background = Sprite(bg_texture);
 	background.setPosition(0.0f, 0.0f);
-
 	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
 	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2, 0));
 	midLine.setFillColor(Color(255, 255, 255, 255));
@@ -434,9 +452,11 @@ int main()
 	// initialize game objects
 	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2 - 100.0f, 20.0f), Vector2f(WINDOW_WIDTH / 2 + 100.0f, 20.0f));
 	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
+
 	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
 	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
 	paddleLeft.setAi(true);
+	paddleRight.setAi(true);
 	
 	while (window.isOpen()) // overall game loop
 	{
@@ -457,6 +477,12 @@ int main()
 				else if (event.key.code == Keyboard::Down) {
 					downKeyPressed = true;
 				}
+				else if (event.key.code == Keyboard::W) {
+					wKeyPressed = true;
+				}
+				else if (event.key.code == Keyboard::S) {
+					sKeyPressed = true;
+				}
 			}
 			else if (event.type == Event::KeyReleased) {
 				if (event.key.code == Keyboard::Up) {
@@ -464,14 +490,20 @@ int main()
 				}
 				else if (event.key.code == Keyboard::Down) {
 					downKeyPressed = false;
+				} 
+				else if (event.key.code == Keyboard::W) {
+					wKeyPressed = false;
+				}
+				else if (event.key.code == Keyboard::S) {
+					sKeyPressed = false;
 				}
 			}
 		}
 
 		// update functions
 		offScreen = ball.update(dt_ms); // update the movement of the ball
-		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition());
-		paddleLeft.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition());
+		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition()); // player controls with (up) (down)
+		paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, ball.getPosition()); // player controls with (w) (s)
 
 		// collision check
 		if (collisionRectangle(&ball, &paddleRight)) {
@@ -497,6 +529,7 @@ int main()
 		window.clear(Color(0, 0, 0, 255)); // clear to black
 		window.draw(background); // draw static board objects
 		window.draw(midLine);
+		// window.draw(menuText);
 
 		scoreboard.draw(&window); // draw updated game objects 
 		ball.draw(&window); 
