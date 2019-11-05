@@ -19,9 +19,60 @@ const int WINDOW_HEIGHT = 512;
 
 const double PI = 3.14159265358979323846264388;
 
+class PowerUp {
+public:
+	PowerUp(int type, Vector2f position);
+	void draw(RenderWindow* window);
+	Vector2f getPosition();
+	float getRadius();
+	void collect();
+	bool isCollected();
+private:
+	CircleShape shape;
+	Vector2f position;
+	int type;
+	float radius;
+	bool collected;
+};
+
+
+PowerUp::PowerUp(int type, Vector2f position) {
+	this->position = position;
+	this->type = type;
+
+	this->radius = 10.0f;
+
+	this->shape = CircleShape(this->radius);
+	this->shape.setFillColor(Color(200, 0, 255));
+}
+
+void PowerUp::collect() {
+	this->shape.setFillColor(Color::Red);
+	this->collected = false;
+}
+
+bool PowerUp::isCollected() {
+	return this->collected;
+}
+
+Vector2f PowerUp::getPosition() {
+	return this->position;
+}
+
+float PowerUp::getRadius() {
+	return this->radius;
+}
+
+void PowerUp::draw(RenderWindow* window) {
+	this->shape.setPosition(Vector2f(this->position.x - this->radius, this->position.y + this->radius));
+	if (this->collected) {
+		window->draw(this->shape);
+	}
+}
+
 class Scoreboard {
 public:
-	Scoreboard(Vector2f posLeft, Vector2f posRight);
+	Scoreboard(Vector2f position);
 	void draw(RenderWindow* window);
 	void update(int scoreRight, int scoreleft);
 	void reset();
@@ -35,7 +86,7 @@ private:
 	Font font;
 };
 
-Scoreboard::Scoreboard(Vector2f posLeft, Vector2f posRight) {
+Scoreboard::Scoreboard(Vector2f position) {
 	this->leftScore = 0;
 	this->rightScore = 0;
 
@@ -49,8 +100,8 @@ Scoreboard::Scoreboard(Vector2f posLeft, Vector2f posRight) {
 
 	this->leftScoreText = Text("0", this->font, 30);
 	this->rightScoreText = Text("0", this->font, 30);
-	this->leftScoreText.setPosition(posLeft);
-	this->rightScoreText.setPosition(posRight);
+	this->leftScoreText.setPosition(Vector2f(position.x - 100.0f, position.y));
+	this->rightScoreText.setPosition(Vector2f(position.x + 80.0f, position.y));
 	this->leftScoreText.setFillColor(sf::Color::White);
 	this->rightScoreText.setFillColor(sf::Color::White);
 	this->leftScoreText.setStyle(sf::Text::Bold);
@@ -264,8 +315,7 @@ void Ball::randomizeStartVelocity() {
 		newX *= -1;
 	}
 
-
-	// velocity alwasy points to right
+	// velocity always points to right
 	this->velocity = Vector2f(newX, newY);
 }
 
@@ -280,18 +330,50 @@ void Ball::setRadius(float newrad) {
 	this->shape.setRadius(this->radius);
 }
 
+/*
 void Ball::bounce(Paddle p) {
 	// flip x
 	this->velocity.x *= -1.0f;
 	// change angle
 	float midP = p.getPosition().y + p.getSize().y / 2.0f; // midpoint of the paddle (y)
-	float spread = abs(midP - this->position.y); // distance from midpoint to collision over 2 (y)
+	float spread = abs(midP - this->position.y); // distance from midpoint to collision (y)
 	float scaleFactor = spread / p.getSize().y + 1.0f; // ratio of distance to paddle height + 1
 	this->velocity.y *= scaleFactor; // scale y by ratio
 	this->velocity.x *= 1.0f / scaleFactor; // reduce x by ratio (to maintain overall speed)
 	// accelerate
 	this->velocity.x *= 1.1f;
 	this->velocity.y *= 1.1f;
+}
+*/
+
+void Ball::bounce(Paddle p) {
+
+	float currentX = this->velocity.x; // current x and y components
+	float currentY = this->velocity.y;
+	float currentMagnitude = sqrt(currentX * currentX + currentY * currentY); // distance formula for magnitude of velocity
+	currentMagnitude *= 1.1f; // 10% increase in speed each bounce
+
+	float midP = p.getPosition().y + p.getSize().y / 2.0f; // midpoint of the paddle (y)
+	float spread = abs(midP - this->position.y + this->radius); // distance from midpoint y to ball center y
+	float ratio = spread / (p.getSize().y / 2.0f); // ratio of distance to total paddle height (between 0-1)
+	float theta = ratio * 80.0f; // angle of exit based on ratio (min 0, max 80)
+	if (theta > 80.0f) {
+		theta = 80.0f;
+	}
+	theta = theta * (PI / 180.0f); // convert to radians
+
+	if (currentY < 0) { // flip angle to reflect y
+		theta *= -1.0f;
+	}
+
+	float newX = cos(theta) * currentMagnitude; // determine new x and y components with accelerated magnitude
+	float newY = sin(theta) * currentMagnitude;
+
+	if (currentX > 0) { // flip X (newX will always come out positive)
+		newX *= -1;
+	}
+
+	this->velocity = Vector2f(newX, newY);
 }
 
 int Ball::update(float dt) {
@@ -352,6 +434,20 @@ float Ball::getRadius() {
 
 bool collisionLine(Vector2f bp, Vector2f pp) { // TODO: use line collision option?
 	return true;
+}
+
+bool collisionCircle(Vector2f b1p, float b1r, Vector2f b2p, float b2r) {
+	b1p.x += b1r; // adjust for top-left convention
+	b1p.y += b1r;
+	b2p.x += b2r;
+	b2p.y += b2r;
+	//compute distance between centers
+	float dist = sqrt( (b1p.x - b2p.x) * (b1p.x - b2p.x) + (b1p.y - b2p.y) * (b1p.y - b2p.y) );
+	float radiiSum = b1r + b2r;
+	if (dist <= radiiSum) {
+		return true;
+	}
+	return false;
 }
 
 bool collisionRectangle(Ball *ball, Paddle *paddle) { // checks if a ball and paddle collided
@@ -446,17 +542,20 @@ int main()
 	Sprite background = Sprite(bg_texture);
 	background.setPosition(0.0f, 0.0f);
 	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
-	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2, 0));
+	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2 - 2.5, 0));
 	midLine.setFillColor(Color(255, 255, 255, 255));
 
 	// initialize game objects
-	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2 - 100.0f, 20.0f), Vector2f(WINDOW_WIDTH / 2 + 100.0f, 20.0f));
+	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2, 20.0f));
 	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
 
 	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
 	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
 	paddleLeft.setAi(true);
 	paddleRight.setAi(true);
+
+	PowerUp pu1(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f));
+	PowerUp pu2(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.2f));
 	
 	while (window.isOpen()) // overall game loop
 	{
@@ -516,6 +615,13 @@ int main()
 			ball.setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + 1.0f, ball.getPosition().y));
 			sfx_impact.play();	
 		}
+
+		// powerup collisions
+		if (collisionCircle(ball.getPosition(), ball.getRadius(), pu1.getPosition(), pu1.getRadius())) {
+			pu1.collect();
+		} else if (collisionCircle(ball.getPosition(), ball.getRadius(), pu2.getPosition(), pu2.getRadius())) {
+			pu2.collect();
+		}
 		
 		// scoring
 		if (offScreen < 0) {
@@ -535,6 +641,9 @@ int main()
 		ball.draw(&window); 
 		paddleRight.draw(&window);
 		paddleLeft.draw(&window);
+
+		pu1.draw(&window);
+		pu2.draw(&window);
 		
 		window.display(); // show the new screen
 	}
