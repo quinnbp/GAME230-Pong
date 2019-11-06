@@ -39,8 +39,9 @@ private:
 PowerUp::PowerUp(int type, Vector2f position) {
 	this->position = position;
 	this->type = type;
-
 	this->radius = 10.0f;
+
+	this->collected = false;
 
 	this->shape = CircleShape(this->radius);
 	this->shape.setFillColor(Color(200, 0, 255));
@@ -48,7 +49,7 @@ PowerUp::PowerUp(int type, Vector2f position) {
 
 void PowerUp::collect() {
 	this->shape.setFillColor(Color::Red);
-	this->collected = false;
+	this->collected = true;
 }
 
 bool PowerUp::isCollected() {
@@ -56,7 +57,7 @@ bool PowerUp::isCollected() {
 }
 
 Vector2f PowerUp::getPosition() {
-	return this->position;
+	return Vector2f(this->position.x + this->radius, this->position.y + this->radius);
 }
 
 float PowerUp::getRadius() {
@@ -65,7 +66,7 @@ float PowerUp::getRadius() {
 
 void PowerUp::draw(RenderWindow* window) {
 	this->shape.setPosition(Vector2f(this->position.x - this->radius, this->position.y + this->radius));
-	if (this->collected) {
+	if (!this->collected) {
 		window->draw(this->shape);
 	}
 }
@@ -252,14 +253,18 @@ class Ball {
 public:
 	Ball();
 	Ball(Vector2f position);
+	Ball(Vector2f position, Vector2f velocity);
 	void draw(RenderWindow* window);
-	int update(float dt);
+	void update(float dt);
 	void bounce(Paddle p);
 	Vector2f getPosition();
 	void setPosition(Vector2f newPosition);
 	float getRadius();
 	void setRadius(float newrad);
 	void randomizeStartVelocity();
+	Vector2f getVelocity();
+	void setVelocity(Vector2f velocity);
+	int isOffScreen();
 private:
 	Vector2f velocity;
 	float baseSpeed;
@@ -267,8 +272,7 @@ private:
 	CircleShape shape;
 	float radius;
 	int colorCycleCount; // for flashing ball
-	Texture ballTexture;
-	Sprite sprite;
+	int offScreen;
 };
 
 Ball::Ball(Vector2f position) {
@@ -283,21 +287,35 @@ Ball::Ball(Vector2f position) {
 	this->randomizeStartVelocity();
 
 	this->colorCycleCount = 10;
+}
+Ball::Ball(Vector2f position, Vector2f velocity) {
+	// set up shape
+	this->radius = 5;
+	this->shape = CircleShape(this->radius);
+	this->shape.setFillColor(Color::Blue);
 
-	// ball texture
-	sf::Texture texture;
-	if (!texture.loadFromFile("ball.png"))
-	{
-		exit(-1);
-	}
-	this->ballTexture = texture;
-	this->ballTexture.setSmooth(true);
-	this->sprite = Sprite(this->ballTexture);
-	this->sprite.setScale(0.1f, 0.1f);
+	// set up position and velocity
+	this->position = position;
+	this->baseSpeed = 0.4f;
+	this->velocity = velocity;
+
+	this->colorCycleCount = 10;
 }
 
 Ball::Ball() {
 	Ball::Ball(Vector2f(0.0f, 0.0f));
+}
+
+int Ball::isOffScreen() {
+	return this->offScreen;
+}
+
+void Ball::setVelocity(Vector2f velocity) {
+	this->velocity = velocity;
+}
+
+Vector2f Ball::getVelocity() {
+	return this->velocity;
 }
 
 void Ball::randomizeStartVelocity() {
@@ -376,7 +394,7 @@ void Ball::bounce(Paddle p) {
 	this->velocity = Vector2f(newX, newY);
 }
 
-int Ball::update(float dt) {
+void Ball::update(float dt) {
 	this->position.x += this->velocity.x * dt;
 	this->position.y += this->velocity.y * dt;
 
@@ -394,14 +412,14 @@ int Ball::update(float dt) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
 		this->randomizeStartVelocity();	
-		return 1;
+		this->offScreen = 1;
 
 	}
 	else if (this->position.x + 2 * this->radius < 0) {
 		this->position.x = WINDOW_WIDTH / 2;
 		this->position.y = WINDOW_HEIGHT / 2;
 		this->randomizeStartVelocity();
-		return -1;
+		this->offScreen = -1;
 	}
 
 	// check y bounds
@@ -414,14 +432,12 @@ int Ball::update(float dt) {
 		this->velocity.y *= -1;
 	}
 
-	return 0;
+	this->offScreen = 0;
 }
 
 void Ball::draw(RenderWindow* window) {
 	this->shape.setPosition(this->position);
-	this->sprite.setPosition(this->position);
 	window->draw(this->shape);
-	//window->draw(this->sprite);
 }
 
 Vector2f Ball::getPosition() {
@@ -437,10 +453,6 @@ bool collisionLine(Vector2f bp, Vector2f pp) { // TODO: use line collision optio
 }
 
 bool collisionCircle(Vector2f b1p, float b1r, Vector2f b2p, float b2r) {
-	b1p.x += b1r; // adjust for top-left convention
-	b1p.y += b1r;
-	b2p.x += b2r;
-	b2p.y += b2r;
 	//compute distance between centers
 	float dist = sqrt( (b1p.x - b2p.x) * (b1p.x - b2p.x) + (b1p.y - b2p.y) * (b1p.y - b2p.y) );
 	float radiiSum = b1r + b2r;
@@ -519,7 +531,12 @@ int main()
 	bool downKeyPressed = false;
 	bool wKeyPressed = false;
 	bool sKeyPressed = false;
-	int offScreen = 0;
+	
+	// keep track of how many balls on screen
+	int ball1OffScreen = 0;
+	int ball2OffScreen = 0;
+	int ball3OffScreen = 0;
+	int activeBalls = 0;
 
 	// menu setup
 	sf::Font fontLoader;
@@ -547,14 +564,19 @@ int main()
 
 	// initialize game objects
 	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2, 20.0f));
-	Ball ball(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
+	Ball ball1(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
+	Ball ball2(Vector2f(-1.0f, -1.0f), Vector2f(0.0f, 0.0f));
+	Ball ball3(Vector2f(-1.0f, -1.0f), Vector2f(0.0f, 0.0f));
 
-	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
-	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
-	paddleLeft.setAi(true);
+	Ball balls[3] = {ball1, ball2, ball3};
+	activeBalls = 1; // one ball active at start of game
+
+	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f)); // place paddles
+	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f)); 
+	paddleLeft.setAi(true); // TEMP ai trigger
 	paddleRight.setAi(true);
 
-	PowerUp pu1(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f));
+	PowerUp pu1(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f)); // place powerups
 	PowerUp pu2(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.2f));
 	
 	while (window.isOpen()) // overall game loop
@@ -599,46 +621,49 @@ int main()
 			}
 		}
 
-		// update functions
-		offScreen = ball.update(dt_ms); // update the movement of the ball
-		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, ball.getPosition()); // player controls with (up) (down)
-		paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, ball.getPosition()); // player controls with (w) (s)
-
-		// collision check
-		if (collisionRectangle(&ball, &paddleRight)) {
-			ball.bounce(paddleRight);
-			ball.setPosition(Vector2f(paddleRight.getPosition().x - 2 * ball.getRadius() - 1.0f, ball.getPosition().y));
-			sfx_impact.play();
+		for (int i = 0; i < activeBalls; i++) { // update the movement of the balls
+			balls[i].update(dt_ms);
 		}
-		else if (collisionRectangle(&ball, &paddleLeft)) {
-			ball.bounce(paddleLeft);
-			ball.setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + 1.0f, ball.getPosition().y));
-			sfx_impact.play();	
+	
+		// update movements of the paddles
+		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[0].getPosition()); // player controls with (up) (down)
+		paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[0].getPosition()); // player controls with (w) (s)
+
+		// collision check for balls
+		for (int i = 0; i < activeBalls; i++) {
+			if (collisionRectangle(&balls[i], &paddleRight)) {
+				balls[i].bounce(paddleRight);
+				balls[i].setPosition(Vector2f(paddleRight.getPosition().x - 2 * balls[i].getRadius() - 1.0f, balls[i].getPosition().y));
+				sfx_impact.play();
+			}
+			else if (collisionRectangle(&balls[i], &paddleLeft)) {
+				balls[i].bounce(paddleLeft);
+				balls[i].setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + 1.0f, balls[i].getPosition().y));
+				sfx_impact.play();
+			}
 		}
 
-		// powerup collisions
-		if (collisionCircle(ball.getPosition(), ball.getRadius(), pu1.getPosition(), pu1.getRadius())) {
-			pu1.collect();
-		} else if (collisionCircle(ball.getPosition(), ball.getRadius(), pu2.getPosition(), pu2.getRadius())) {
-			pu2.collect();
+		//scoring
+		for (int i = 0; i < activeBalls; i++) {
+			if (balls[i].isOffScreen() < 0) {
+				scoreboard.update(0, 1);
+			}
+			else if (balls[i].isOffScreen() > 0) {
+				scoreboard.update(1, 0);
+			}
 		}
 		
-		// scoring
-		if (offScreen < 0) {
-			scoreboard.update(0, 1);
-		}
-		else if (offScreen > 0) {
-			scoreboard.update(1, 0);
-		}
-
-		// draw functions
+		// draw board functions
 		window.clear(Color(0, 0, 0, 255)); // clear to black
 		window.draw(background); // draw static board objects
 		window.draw(midLine);
 		// window.draw(menuText);
 
-		scoreboard.draw(&window); // draw updated game objects 
-		ball.draw(&window); 
+		// draw updated game objects 
+		scoreboard.draw(&window); 
+		for (int i = 0; i < activeBalls; i++) {
+			balls[i].draw(&window);
+		}
 		paddleRight.draw(&window);
 		paddleLeft.draw(&window);
 
