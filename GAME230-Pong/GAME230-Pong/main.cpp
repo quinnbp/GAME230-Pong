@@ -521,7 +521,6 @@ int main() {
 	bool gameOver = false;
 	bool menuChosen = false;
 
-
 	// key booleans
 	bool upKeyPressed = false;
 	bool downKeyPressed = false;
@@ -529,16 +528,46 @@ int main() {
 	bool sKeyPressed = false;
 
 	// menu setup
+	sf::Font spacefontloader;
+	if (!spacefontloader.loadFromFile("spacefont.otf"))
+	{
+		std::exit(-1);
+	}
 	sf::Font fontLoader;
 	if (!fontLoader.loadFromFile("arial.ttf"))
 	{
 		std::exit(-1);
 	}
+	
+	Text titleText;
+	titleText.setFont(spacefontloader);
+	titleText.setString("SPACE PONG");
+	titleText.setFillColor(Color::White);
+	titleText.setCharacterSize(60);
+	titleText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 275.0f, WINDOW_HEIGHT / 2.0f - 200.0f));
+	
+	Text titleTextShadow = titleText;
+	titleTextShadow.setFillColor(Color::Red);
+	titleTextShadow.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 275.0f - 3.0f, WINDOW_HEIGHT / 2.0f - 200.0f - 3.0f));
+	
 	Text menuText;
 	menuText.setFont(fontLoader);
-	menuText.setString("[1] Play vs A.I.\n[2] Play vs Human\n[3] Demo mode\n[4] Exit");
+	menuText.setString("1  Play vs AI\n2  Play vs Human\n3  Demo mode\n4  Exit");
 	menuText.setFillColor(Color::White);
 	menuText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 100.0f, WINDOW_HEIGHT / 2.0f - 80.0f));
+
+	Text menuTextShadow = menuText;
+	menuTextShadow.setFillColor(Color::Red);
+	menuTextShadow.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 100.0f - 2.0f, WINDOW_HEIGHT / 2.0f - 80.0f - 2.0f));
+
+	
+	sf::Texture bg2_texture;
+	if (!bg2_texture.loadFromFile("spacebg.png"))
+	{
+		exit(-1);
+	}
+	Sprite backgroundMenu = Sprite(bg2_texture);
+	backgroundMenu.setPosition(0.0f, 0.0f);
 
 	// board setup
 	sf::Texture bg_texture;
@@ -546,8 +575,8 @@ int main() {
 	{
 		exit(-1);
 	}
-	Sprite background = Sprite(bg_texture);
-	background.setPosition(0.0f, 0.0f);
+	Sprite backgroundGame = Sprite(bg_texture);
+	backgroundGame.setPosition(0.0f, 0.0f);
 	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
 	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2 - 2.5, 0));
 	midLine.setFillColor(Color(255, 255, 255, 255));
@@ -615,100 +644,110 @@ int main() {
 				}
 			}
 		}
-	
-		// update movements of the paddles
-		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[0].getPosition()); // player controls with (up) (down)
-		paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[0].getPosition()); // player controls with (w) (s)
+		
+		if (menuChosen) {
+			// update movements of the paddles
+			paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[0].getPosition()); // player controls with (up) (down)
+			paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[0].getPosition()); // player controls with (w) (s)
 
-		//update ball behavior for each ball in array
-		float ballsOnScreen = 0;
-		for (int i = 0; i < 3; i++) {
-			balls[i].update(dt_ms); // upate ball position (will set offscreen if offscreen)
+			//update ball behavior for each ball in array
+			float ballsOnScreen = 0;
+			for (int i = 0; i < 3; i++) {
+				balls[i].update(dt_ms); // upate ball position (will set offscreen if offscreen)
 
-			// check paddle collisions
-			if (collisionRectangle(&balls[i], &paddleRight)) {
-				balls[i].bounce(paddleRight);
-				balls[i].setPosition(Vector2f(paddleRight.getPosition().x - balls[i].getRadius() - 1.0f, balls[i].getPosition().y));
-				sfx_impact.play();
-			}
-			else if (collisionRectangle(&balls[i], &paddleLeft)) {
-				balls[i].bounce(paddleLeft);
-				balls[i].setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + 
-					balls[i].getRadius() + 1.0f, balls[i].getPosition().y));
-				sfx_impact.play();
-			}
+				// check paddle collisions
+				if (collisionRectangle(&balls[i], &paddleRight) && balls[i].isActive()) {
+					balls[i].bounce(paddleRight);
+					balls[i].setPosition(Vector2f(paddleRight.getPosition().x - balls[i].getRadius() - 1.0f, balls[i].getPosition().y));
+					sfx_impact.play();
+				}
+				else if (collisionRectangle(&balls[i], &paddleLeft) && balls[i].isActive()) {
+					balls[i].bounce(paddleLeft);
+					balls[i].setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x +
+						balls[i].getRadius() + 1.0f, balls[i].getPosition().y));
+					sfx_impact.play();
+				}
 
-			// check if ball hit powerup
-			if (!pu1.isCollected()) { // if pu1 still active
-				if (collisionCircle(balls[i].getPosition(), balls[i].getRadius(), pu1.getPosition(), pu1.getRadius())) {
-					pu1.collect(true); // remove on collision, create multiball
-					balls[1].setActive(true);
-					balls[1].setPosition(balls[i].getPosition());
-					balls[1].setVelocity(Vector2f(balls[i].getVelocity().x, -1.0f * balls[i].getVelocity().y));
-					sfx_powerup.play();
+				// check if ball hit powerup
+				if (!pu1.isCollected()) { // if pu1 still active
+					if (collisionCircle(balls[i].getPosition(), balls[i].getRadius(), pu1.getPosition(), pu1.getRadius())) {
+						pu1.collect(true); // remove on collision, create multiball
+						balls[1].setActive(true);
+						balls[1].setPosition(balls[i].getPosition());
+						balls[1].setVelocity(Vector2f(balls[i].getVelocity().x, -1.0f * balls[i].getVelocity().y));
+						sfx_powerup.play();
+					}
+				}
+				if (!pu2.isCollected()) { // if pu2 active
+					if (collisionCircle(balls[i].getPosition(), balls[i].getRadius(), pu2.getPosition(), pu2.getRadius())) {
+						pu2.collect(true); // remove on collision, create multiball
+						balls[2].setActive(true);
+						balls[2].setPosition(balls[i].getPosition());
+						balls[2].setVelocity(Vector2f(balls[i].getVelocity().x, -1.0f * balls[i].getVelocity().y));
+						sfx_powerup.play();
+					}
+				}
+
+				// keep track of how many balls on screen, scores
+				if (balls[i].isOffScreen() != 0 && balls[i].isActive()) { // if active ball off screen
+					balls[i].setActive(false);
+					balls[i].setVelocity(Vector2f(0.0f, 0.0f));
+					if (balls[i].isOffScreen() < 0) {
+						// off the left side
+						scoreboard.update(0, 1);
+					}
+					else { // off right side
+						scoreboard.update(1, 0);
+					}
+				}
+				else if (balls[i].isOffScreen() == 0 && balls[i].isActive()) { // active ball on screen
+					ballsOnScreen++;
 				}
 			}
-			if (!pu2.isCollected()) { // if pu2 active
-				if (collisionCircle(balls[i].getPosition(), balls[i].getRadius(), pu2.getPosition(), pu2.getRadius())) {
-					pu2.collect(true); // remove on collision, create multiball
-					balls[2].setActive(true);
-					balls[2].setPosition(balls[i].getPosition());
-					balls[2].setVelocity(Vector2f(balls[i].getVelocity().x, -1.0f * balls[i].getVelocity().y));
-					sfx_powerup.play();
+
+			// if no balls on screen, move main ball to center and start it
+			if (ballsOnScreen == 0) {
+				balls[0].setPosition(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
+				balls[0].randomizeStartVelocity();
+				balls[0].setActive(true);
+				pu1.collect(false);
+				pu2.collect(false);
+			}
+
+			// clear to black
+			window.clear(Color(0, 0, 0, 255));
+			// draw static board objects
+			window.draw(backgroundGame);
+			window.draw(midLine);
+
+			// draw updated game objects 
+			scoreboard.draw(&window);
+			paddleRight.draw(&window);
+			paddleLeft.draw(&window);
+
+			// draw all currently active balls
+			for (int i = 0; i < 3; i++) {
+				if (balls[i].isActive()) {
+					balls[i].draw(&window);
 				}
 			}
 
-			// keep track of how many balls on screen, scores
-			if (balls[i].isOffScreen() != 0 && balls[i].isActive()) { // if active ball off screen
-				balls[i].setActive(false);
-				balls[i].setVelocity(Vector2f(0.0f, 0.0f));
-				if (balls[i].isOffScreen() < 0) {
-					// off the left side
-					scoreboard.update(0, 1);
-				}
-				else { // off right side
-					scoreboard.update(1, 0);
-				}
+			// draw all uncollected powerups
+			if (!pu1.isCollected()) {
+				pu1.draw(&window);
 			}
-			else if (balls[i].isOffScreen() == 0 && balls[i].isActive()) { // active ball on screen
-				ballsOnScreen++;
+			if (!pu2.isCollected()) {
+				pu2.draw(&window);
 			}
 		}
-
-		// if no balls on screen, move main ball to center and start it
-		if (ballsOnScreen == 0) {
-			balls[0].setPosition(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
-			balls[0].randomizeStartVelocity();
-			balls[0].setActive(true);
-			pu1.collect(false);
-			pu2.collect(false);
-		}
-
-		// clear to black
-		window.clear(Color(0, 0, 0, 255));
-		// draw static board objects
-		window.draw(background);
-		window.draw(midLine);
-		// window.draw(menuText);
-
-		// draw updated game objects 
-		scoreboard.draw(&window); 
-		paddleRight.draw(&window);
-		paddleLeft.draw(&window);
-
-		// draw all currently active balls
-		for (int i = 0; i < 3; i++) {
-			if (balls[i].isActive()) {
-				balls[i].draw(&window);
-			}
-		}
-
-		// draw all uncollected powerups
-		if (!pu1.isCollected()) {
-			pu1.draw(&window);
-		}
-		if (!pu2.isCollected()) {
-			pu2.draw(&window);
+		else {
+			window.clear(Color(0, 0, 0, 255));
+			window.draw(backgroundMenu);
+			window.draw(midLine);
+			window.draw(titleTextShadow);
+			window.draw(titleText);
+			window.draw(menuTextShadow);
+			window.draw(menuText);
 		}
 
 		window.display();
