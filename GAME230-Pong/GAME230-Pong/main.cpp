@@ -66,9 +66,7 @@ float PowerUp::getRadius() {
 
 void PowerUp::draw(RenderWindow* window) {
 	this->shape.setPosition(Vector2f(this->position.x - this->radius, this->position.y + this->radius));
-	if (!this->collected) {
-		window->draw(this->shape);
-	}
+	window->draw(this->shape);
 }
 
 class Scoreboard {
@@ -265,6 +263,8 @@ public:
 	Vector2f getVelocity();
 	void setVelocity(Vector2f velocity);
 	int isOffScreen();
+	bool isActive();
+	void setActive(bool state);
 private:
 	Vector2f velocity;
 	float baseSpeed;
@@ -273,6 +273,7 @@ private:
 	float radius;
 	int colorCycleCount; // for flashing ball
 	int offScreen;
+	bool active;
 };
 
 Ball::Ball(Vector2f position) {
@@ -287,6 +288,7 @@ Ball::Ball(Vector2f position) {
 	this->randomizeStartVelocity();
 
 	this->colorCycleCount = 10;
+	this->active = false;
 }
 Ball::Ball(Vector2f position, Vector2f velocity) {
 	// set up shape
@@ -300,10 +302,19 @@ Ball::Ball(Vector2f position, Vector2f velocity) {
 	this->velocity = velocity;
 
 	this->colorCycleCount = 10;
+	this->active = false;
 }
 
 Ball::Ball() {
 	Ball::Ball(Vector2f(0.0f, 0.0f));
+}
+
+bool Ball::isActive() {
+	return this->active;
+}
+
+void Ball::setActive(bool state) {
+	this->active = state;
 }
 
 int Ball::isOffScreen() {
@@ -347,22 +358,6 @@ void Ball::setRadius(float newrad) {
 	}
 	this->shape.setRadius(this->radius);
 }
-
-/*
-void Ball::bounce(Paddle p) {
-	// flip x
-	this->velocity.x *= -1.0f;
-	// change angle
-	float midP = p.getPosition().y + p.getSize().y / 2.0f; // midpoint of the paddle (y)
-	float spread = abs(midP - this->position.y); // distance from midpoint to collision (y)
-	float scaleFactor = spread / p.getSize().y + 1.0f; // ratio of distance to paddle height + 1
-	this->velocity.y *= scaleFactor; // scale y by ratio
-	this->velocity.x *= 1.0f / scaleFactor; // reduce x by ratio (to maintain overall speed)
-	// accelerate
-	this->velocity.x *= 1.1f;
-	this->velocity.y *= 1.1f;
-}
-*/
 
 void Ball::bounce(Paddle p) {
 
@@ -409,17 +404,14 @@ void Ball::update(float dt) {
 
 	// check x bounds
 	if (this->position.x > WINDOW_WIDTH) {
-		this->position.x = WINDOW_WIDTH / 2;
-		this->position.y = WINDOW_HEIGHT / 2;
-		this->randomizeStartVelocity();	
 		this->offScreen = 1;
 
 	}
 	else if (this->position.x + 2 * this->radius < 0) {
-		this->position.x = WINDOW_WIDTH / 2;
-		this->position.y = WINDOW_HEIGHT / 2;
-		this->randomizeStartVelocity();
 		this->offScreen = -1;
+	}
+	else {
+		this->offScreen = 0;
 	}
 
 	// check y bounds
@@ -431,8 +423,6 @@ void Ball::update(float dt) {
 		this->position.y = 0;
 		this->velocity.y *= -1;
 	}
-
-	this->offScreen = 0;
 }
 
 void Ball::draw(RenderWindow* window) {
@@ -531,12 +521,6 @@ int main()
 	bool downKeyPressed = false;
 	bool wKeyPressed = false;
 	bool sKeyPressed = false;
-	
-	// keep track of how many balls on screen
-	int ball1OffScreen = 0;
-	int ball2OffScreen = 0;
-	int ball3OffScreen = 0;
-	int activeBalls = 0;
 
 	// menu setup
 	sf::Font fontLoader;
@@ -564,31 +548,36 @@ int main()
 
 	// initialize game objects
 	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2, 20.0f));
-	Ball ball1(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
-	Ball ball2(Vector2f(-1.0f, -1.0f), Vector2f(0.0f, 0.0f));
-	Ball ball3(Vector2f(-1.0f, -1.0f), Vector2f(0.0f, 0.0f));
+	
+	Ball ball1(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f)); // primary ball
+	ball1.setActive(true);
+
+	Ball ball2(Vector2f(-100.0f, 0)); // extras created by powerups
+	Ball ball3(Vector2f(-100.0f, 0));
 
 	Ball balls[3] = {ball1, ball2, ball3};
-	activeBalls = 1; // one ball active at start of game
 
-	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f)); // place paddles
+	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f)); // set up left and right paddles
 	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f)); 
-	paddleLeft.setAi(true); // TEMP ai trigger
-	paddleRight.setAi(true);
+	
+	paddleLeft.setAi(true); // TODO: make the AI trigger an option
+	//paddleRight.setAi(true);
 
 	PowerUp pu1(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f)); // place powerups
 	PowerUp pu2(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.2f));
 	
-	while (window.isOpen()) // overall game loop
+	while (window.isOpen()) // GAME LOOP
 	{
-		// Timing
+		// frame timing for velocity and position modifications
 		dt_ms = clock.getElapsedTime().asMilliseconds();
 		clock.restart();
 		
+		// keep track of keyboard and click events
 		Event event;
 		while (window.pollEvent(event))
 		{
 			if (event.type == Event::Closed) {
+				music.stop(); // cut music on exit
 				window.close();
 			}
 			else if (event.type == Event::KeyPressed) {
@@ -620,17 +609,17 @@ int main()
 				}
 			}
 		}
-
-		for (int i = 0; i < activeBalls; i++) { // update the movement of the balls
-			balls[i].update(dt_ms);
-		}
 	
 		// update movements of the paddles
 		paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[0].getPosition()); // player controls with (up) (down)
 		paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[0].getPosition()); // player controls with (w) (s)
 
-		// collision check for balls
-		for (int i = 0; i < activeBalls; i++) {
+		//update ball behavior for each ball in array
+		float ballsOnScreen = 0;
+		for (int i = 0; i < 3; i++) {
+			balls[i].update(dt_ms); // upate ball position (will set offscreen if offscreen)
+
+			// check paddle collisions
 			if (collisionRectangle(&balls[i], &paddleRight)) {
 				balls[i].bounce(paddleRight);
 				balls[i].setPosition(Vector2f(paddleRight.getPosition().x - 2 * balls[i].getRadius() - 1.0f, balls[i].getPosition().y));
@@ -641,38 +630,77 @@ int main()
 				balls[i].setPosition(Vector2f(paddleLeft.getPosition().x + paddleLeft.getSize().x + 1.0f, balls[i].getPosition().y));
 				sfx_impact.play();
 			}
+
+			// check if ball hit powerup
+			if (!pu1.isCollected()) { // if pu1 still active
+				if (collisionCircle(balls[i].getPosition(), balls[i].getRadius(), pu1.getPosition(), pu1.getRadius())) {
+					pu1.collect(); // remove on collision, create multiball
+					balls[1].setActive(true);
+					balls[1].setPosition(balls[i].getPosition());
+					balls[1].setVelocity(Vector2f(balls[i].getVelocity().x, -1.0f * balls[i].getVelocity().y));
+				}
+			}
+			if (!pu2.isCollected()) { // if pu2 active
+				if (collisionCircle(balls[i].getPosition(), balls[i].getRadius(), pu2.getPosition(), pu2.getRadius())) {
+					pu2.collect(); // remove on collision, create multiball
+					balls[2].setActive(true);
+					balls[2].setPosition(balls[i].getPosition());
+					balls[2].setVelocity(Vector2f(balls[i].getVelocity().x, -1.0f * balls[i].getVelocity().y));
+				}
+			}
+
+			// keep track of how many balls on screen, scores
+			if (balls[i].isOffScreen() != 0 && balls[i].isActive()) { // if active ball off screen
+				balls[i].setActive(false);
+				balls[i].setVelocity(Vector2f(0.0f, 0.0f));
+				if (balls[i].isOffScreen() < 0) {
+					// off the left side
+					scoreboard.update(0, 1);
+				}
+				else { // off right side
+					scoreboard.update(1, 0);
+				}
+			}
+			else if (balls[i].isOffScreen() == 0 && balls[i].isActive()) { // active ball on screen
+				ballsOnScreen++;
+			}
 		}
 
-		//scoring
-		for (int i = 0; i < activeBalls; i++) {
-			if (balls[i].isOffScreen() < 0) {
-				scoreboard.update(0, 1);
-			}
-			else if (balls[i].isOffScreen() > 0) {
-				scoreboard.update(1, 0);
-			}
+		// if no balls on screen, move main ball to center and start it
+		if (ballsOnScreen == 0) {
+			balls[0].setPosition(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
+			balls[0].randomizeStartVelocity();
+			balls[0].setActive(true);
 		}
-		
-		// draw board functions
-		window.clear(Color(0, 0, 0, 255)); // clear to black
-		window.draw(background); // draw static board objects
+
+		// clear to black
+		window.clear(Color(0, 0, 0, 255));
+		// draw static board objects
+		window.draw(background);
 		window.draw(midLine);
 		// window.draw(menuText);
 
 		// draw updated game objects 
 		scoreboard.draw(&window); 
-		for (int i = 0; i < activeBalls; i++) {
-			balls[i].draw(&window);
-		}
 		paddleRight.draw(&window);
 		paddleLeft.draw(&window);
 
-		pu1.draw(&window);
-		pu2.draw(&window);
-		
-		window.display(); // show the new screen
-	}
+		// draw all currently active balls
+		for (int i = 0; i < 3; i++) {
+			if (balls[i].isActive()) {
+				balls[i].draw(&window);
+			}
+		}
 
-	music.stop(); // cut music on exit
+		// draw all uncollected powerups
+		if (!pu1.isCollected()) {
+			pu1.draw(&window);
+		}
+		if (!pu2.isCollected()) {
+			pu2.draw(&window);
+		}
+
+		window.display();
+	}
 	return 0;
 }
