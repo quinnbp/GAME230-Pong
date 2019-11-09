@@ -695,8 +695,13 @@ int main() {
 		
 		if (menuChosen && !gameOver) { // if game is in progress
 			// update movements of the paddles
-			paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[0].getPosition()); // player controls with (up) (down)
-			paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[0].getPosition()); // player controls with (w) (s)
+			for (int i = 0; i < 3; i++) { // track first found active ball
+				if (balls[i].isActive()) {
+					paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[i].getPosition()); // player controls with (up) (down)
+					paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[i].getPosition()); // player controls with (w) (s)
+					break;
+				}
+			}
 
 			//update ball behavior for each ball in array
 			float ballsOnScreen = 0;
@@ -827,7 +832,6 @@ int main() {
 			//return paddles to middle
 			paddleRight.setPosition(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
 			paddleLeft.setPosition(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
-
 		}
 		else { // menu screen
 			window.clear(Color(0, 0, 0, 255));
