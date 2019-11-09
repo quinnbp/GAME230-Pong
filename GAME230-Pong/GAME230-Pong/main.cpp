@@ -74,6 +74,7 @@ public:
 	void draw(RenderWindow* window);
 	void update(int scoreRight, int scoreleft);
 	void reset();
+	Vector2f getScores();
 private:
 	int leftScore;
 	int rightScore;
@@ -106,7 +107,15 @@ Scoreboard::Scoreboard(Vector2f position) {
 	this->rightScoreText.setStyle(sf::Text::Bold);
 }
 
+Vector2f Scoreboard::getScores() {
+	return Vector2f(this->leftScore, this->rightScore);
+}
+
 void Scoreboard::draw(RenderWindow* window) {
+	// set strings to reflect score
+	this->leftScoreText.setString(to_string(this->leftScore));
+	this->rightScoreText.setString(to_string(this->rightScore));
+	// draw strings
 	window->draw(this->leftScoreText);
 	window->draw(this->rightScoreText);
 }
@@ -115,36 +124,22 @@ void Scoreboard::update(int scoreLeft, int scoreRight) {
 	// update score ints
 	this->leftScore += scoreLeft;
 	this->rightScore += scoreRight;
-
-	// change  text to reflect change
-	this->leftScoreText.setString(to_string(this->leftScore));
-	this->rightScoreText.setString(to_string(this->rightScore));
 }
 
 void Scoreboard::reset() {
 	// update score ints
 	this->leftScore = 0;
 	this->rightScore = 0;
-
-	// change  text to reflect change
-	this->leftScoreText.setString(to_string(this->leftScore));
-	this->rightScoreText.setString(to_string(this->rightScore));
 }
 
 class Paddle {
 public:
-	// constructor
 	Paddle(Vector2f position);
-
-	// accessors and mutators
 	Vector2f getPosition();
 	Vector2f getSize();
 	void setAi(bool toSet);
-
-	// render function
 	void draw(RenderWindow* window);
-
-	// update functions
+	void setPosition(Vector2f np);
 	void setVelocityPlayer(float dt, bool down, bool up);
 	void setVelocityAi(float dt, Vector2f bp);
 	void updateDelegator(float dt, bool down, bool up, Vector2f bp);
@@ -169,6 +164,10 @@ Paddle::Paddle(Vector2f position) {
 
 	// set up ai
 	this->ai = false;
+}
+
+void Paddle::setPosition(Vector2f np) {
+	this->position = np;
 }
 
 void Paddle::setAi(bool toSet) {
@@ -526,6 +525,7 @@ int main() {
 	bool downKeyPressed = false;
 	bool wKeyPressed = false;
 	bool sKeyPressed = false;
+	int menuChoice = 0;
 
 	// menu setup
 	sf::Font spacefontloader;
@@ -544,11 +544,12 @@ int main() {
 	titleText.setString("SPACE PONG");
 	titleText.setFillColor(Color::White);
 	titleText.setCharacterSize(60);
-	titleText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 275.0f, WINDOW_HEIGHT / 2.0f - 200.0f));
+	titleText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 275.0f, WINDOW_HEIGHT / 2.0f - 150.0f));
+	titleText.rotate(-7.5f);
 	
 	Text titleTextShadow = titleText;
 	titleTextShadow.setFillColor(Color::Red);
-	titleTextShadow.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 275.0f - 3.0f, WINDOW_HEIGHT / 2.0f - 200.0f - 3.0f));
+	titleTextShadow.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 275.0f - 3.0f, WINDOW_HEIGHT / 2.0f - 150.0f - 3.0f));
 	
 	Text menuText;
 	menuText.setFont(fontLoader);
@@ -560,6 +561,19 @@ int main() {
 	menuTextShadow.setFillColor(Color::Red);
 	menuTextShadow.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 100.0f - 2.0f, WINDOW_HEIGHT / 2.0f - 80.0f - 2.0f));
 
+	Text gameOverText;
+	gameOverText.setFont(spacefontloader);
+	gameOverText.setString("");
+	gameOverText.setCharacterSize(20);
+	gameOverText.setFillColor(Color::White);
+	gameOverText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT));
+
+	Text spaceBarText;
+	spaceBarText.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 300.0f, WINDOW_HEIGHT / 2.0f));
+	spaceBarText.setFont(spacefontloader);
+	spaceBarText.setString("Press space to play again\n  or press Esc for menu");
+	spaceBarText.setCharacterSize(10);
+	spaceBarText.setFillColor(Color::White);
 	
 	sf::Texture bg2_texture;
 	if (!bg2_texture.loadFromFile("spacebg.png"))
@@ -594,9 +608,6 @@ int main() {
 
 	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f)); // set up left and right paddles
 	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));				  // start in middle
-	
-	paddleLeft.setAi(true); // TODO: make the AI trigger an option
-	//paddleRight.setAi(true);
 
 	PowerUp pu1(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f)); // place powerups
 	PowerUp pu2(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.2f));
@@ -628,6 +639,43 @@ int main() {
 				else if (event.key.code == Keyboard::S) {
 					sKeyPressed = true;
 				}
+				else if (event.key.code == Keyboard::Num1) {
+					if (!menuChosen) {
+						menuChoice = 1;
+						gameOver = false;
+					}
+				}
+				else if (event.key.code == Keyboard::Num2) {
+					if (!menuChosen) {
+						menuChoice = 2;
+						gameOver = false;
+					}
+				}
+				else if (event.key.code == Keyboard::Num3) {
+					if (!menuChosen) {
+						menuChoice = 3;
+						gameOver = false;
+					}
+				}
+				else if (event.key.code == Keyboard::Num4) {
+					if (!menuChosen) {
+						music.stop(); // cut music on exit
+						window.close();
+					}
+				}
+				else if (event.key.code == Keyboard::Space) {
+					if (menuChosen && gameOver) {
+						gameOver = false; // start new game, same settings
+						scoreboard.reset();
+					}
+				}
+				else if (event.key.code == Keyboard::Escape) {
+					if (menuChosen && gameOver) { // return to menu
+						menuChosen = false;
+						gameOver = false;
+						scoreboard.reset();
+					}
+				}
 			}
 			else if (event.type == Event::KeyReleased) {
 				if (event.key.code == Keyboard::Up) {
@@ -645,7 +693,7 @@ int main() {
 			}
 		}
 		
-		if (menuChosen) {
+		if (menuChosen && !gameOver) { // if game is in progress
 			// update movements of the paddles
 			paddleRight.updateDelegator(dt_ms, downKeyPressed, upKeyPressed, balls[0].getPosition()); // player controls with (up) (down)
 			paddleLeft.updateDelegator(dt_ms, sKeyPressed, wKeyPressed, balls[0].getPosition()); // player controls with (w) (s)
@@ -705,6 +753,20 @@ int main() {
 				}
 			}
 
+			if (scoreboard.getScores().x >= 5) {
+				gameOver = true;
+				gameOverText.setString("Left player wins");
+				gameOverText.setPosition(Vector2f(15.0f, WINDOW_HEIGHT - 30.0f));
+			}
+			else if (scoreboard.getScores().y >= 5) {
+				gameOver = true;
+				gameOverText.setString("Right player wins");
+				gameOverText.setPosition(Vector2f(WINDOW_WIDTH - 320.0f, WINDOW_HEIGHT - 30.0f));
+			}
+			else {
+				gameOverText.setString("");
+			}
+
 			// if no balls on screen, move main ball to center and start it
 			if (ballsOnScreen == 0) {
 				balls[0].setPosition(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f));
@@ -721,6 +783,7 @@ int main() {
 			window.draw(midLine);
 
 			// draw updated game objects 
+			window.draw(gameOverText);
 			scoreboard.draw(&window);
 			paddleRight.draw(&window);
 			paddleLeft.draw(&window);
@@ -740,16 +803,57 @@ int main() {
 				pu2.draw(&window);
 			}
 		}
-		else {
+		else if (menuChosen && gameOver) { // end game, not menu screen
+			// clear to black
+			window.clear(Color(0, 0, 0, 255));
+			// draw static board objects
+			window.draw(backgroundGame);
+			window.draw(midLine);
+
+			// draw game objects 
+			window.draw(gameOverText);
+			window.draw(spaceBarText);
+
+			scoreboard.draw(&window);
+			paddleRight.draw(&window);
+			paddleLeft.draw(&window);
+
+			// stop drawing balls and powerups but do reset for next game
+			ball1.setActive(true);
+			ball2.setActive(false);
+			ball3.setActive(false);
+			pu1.collect(false);
+			pu2.collect(false);
+			//return paddles to middle
+			paddleRight.setPosition(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
+			paddleLeft.setPosition(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
+
+		}
+		else { // menu screen
 			window.clear(Color(0, 0, 0, 255));
 			window.draw(backgroundMenu);
-			window.draw(midLine);
 			window.draw(titleTextShadow);
 			window.draw(titleText);
 			window.draw(menuTextShadow);
 			window.draw(menuText);
-		}
 
+			if (menuChoice != 0) { // user made selection
+				menuChosen = true; // take out of menu
+				if (menuChoice == 1) { // 1 player mode
+					paddleLeft.setAi(true);
+					paddleRight.setAi(false);
+				}
+				else if (menuChoice == 2) { // 2 player mode
+					paddleLeft.setAi(false);
+					paddleRight.setAi(false);
+				}
+				else if (menuChoice == 3) { // demo 
+					paddleLeft.setAi(true);
+					paddleRight.setAi(true);
+				}
+				menuChoice = 0;
+			}
+		}
 		window.display();
 	}
 	return 0;
