@@ -14,14 +14,21 @@
 using namespace std;
 using namespace sf;
 
+// for window resizing (this may break a few things)
 const int WINDOW_WIDTH = 1024;
 const int WINDOW_HEIGHT = 512;
 
+// for angle calculations
 const double PI = 3.14159265358979323846264388;
+
+/*
+Powerup class for SFML Pong
+Draws a circle on the screen and keeps track of whether the powerup is collected or not.
+*/
 
 class PowerUp {
 public:
-	PowerUp(int type, Vector2f position);
+	PowerUp(Vector2f position);
 	void draw(RenderWindow* window);
 	Vector2f getPosition();
 	float getRadius();
@@ -30,18 +37,14 @@ public:
 private:
 	CircleShape shape;
 	Vector2f position;
-	int type;
 	float radius;
 	bool collected;
 };
 
-PowerUp::PowerUp(int type, Vector2f position) {
+PowerUp::PowerUp(Vector2f position) {
 	this->position = position;
-	this->type = type;
 	this->radius = 10.0f;
-
 	this->collected = false;
-
 	this->shape = CircleShape(this->radius);
 	this->shape.setFillColor(Color(200, 0, 255));
 }
@@ -68,6 +71,10 @@ void PowerUp::draw(RenderWindow* window) {
 	window->draw(this->shape);
 }
 
+/*
+Scoreboard class for SFML Pong
+Represents the current score on screen
+*/
 class Scoreboard {
 public:
 	Scoreboard(Vector2f position);
@@ -96,15 +103,12 @@ Scoreboard::Scoreboard(Vector2f position) {
 	}
 
 	this->font = fontLoader;
-
 	this->leftScoreText = Text("0", this->font, 30);
-	this->rightScoreText = Text("0", this->font, 30);
+	this->leftScoreText.setFillColor(sf::Color::White);
+	this->leftScoreText.setStyle(sf::Text::Bold);
+	this->rightScoreText = this->leftScoreText;
 	this->leftScoreText.setPosition(Vector2f(position.x - 100.0f, position.y));
 	this->rightScoreText.setPosition(Vector2f(position.x + 80.0f, position.y));
-	this->leftScoreText.setFillColor(sf::Color::White);
-	this->rightScoreText.setFillColor(sf::Color::White);
-	this->leftScoreText.setStyle(sf::Text::Bold);
-	this->rightScoreText.setStyle(sf::Text::Bold);
 }
 
 Vector2f Scoreboard::getScores() {
@@ -132,6 +136,10 @@ void Scoreboard::reset() {
 	this->rightScore = 0;
 }
 
+/*
+Paddle class for SFML Pong
+Represents the paddles on screen, takes input from the keyboard, and provides movement for AI player(s)
+*/
 class Paddle {
 public:
 	Paddle(Vector2f position);
@@ -156,13 +164,10 @@ Paddle::Paddle(Vector2f position) {
 	// set up shape
 	this->height = 70.0f;
 	this->shape = RectangleShape(Vector2f(10.0f, this->height));
-
-	// set up pos and velocity
 	this->position = position;
 	this->velocity_y = 0.0f;
 	this->baseVelocity = 0.4f;
-
-	// set up ai
+	// if ai player or not
 	this->ai = false;
 }
 
@@ -170,8 +175,8 @@ void Paddle::setPosition(Vector2f np) {
 	this->position = np;
 }
 
-void Paddle::setAi(bool toSet) {
-	this->ai = toSet;
+void Paddle::setAi(bool state) {
+	this->ai = state;
 }
 
 Vector2f Paddle::getPosition() {
@@ -204,6 +209,7 @@ void Paddle::updateDelegator(float dt, bool down, bool up, Vector2f bp) {
 }
 
 void Paddle::setVelocityAi(float dt, Vector2f bp) {
+	// sets the paddle velocity based on y-tracking the ball
 	float distanceToBall = abs(this->position.x - bp.x);
 	if (distanceToBall < WINDOW_WIDTH / 2.0f) {
 		if (bp.y > this->position.y + this->height) {
@@ -240,6 +246,10 @@ void Paddle::draw(RenderWindow* window) {
 	window->draw(this->shape);
 }
 
+/*
+Ball class for SFML Pong
+Represents the ball, handles movement and bouncing, as well as randomizing velocity
+*/
 class Ball {
 public:
 	Ball(Vector2f position);
@@ -341,7 +351,7 @@ void Ball::setPosition(Vector2f newPosition) {
 }
 
 void Ball::setRadius(float newrad) {
-	if (newrad >= 1) {
+	if (newrad >= 1) { // check to make sure ball would be visible
 		this->radius = newrad;
 	}
 	this->shape.setRadius(this->radius);
@@ -431,8 +441,13 @@ float Ball::getRadius() {
 	return this->radius;
 }
 
+
+/*
+Checks for collision between two circles
+b1p and b2p are the CENTER positions of the two circles
+*/
 bool collisionCircle(Vector2f b1p, float b1r, Vector2f b2p, float b2r) {
-	// b1p and b2p are the CENTER positions of the two circles
+
 	//compute distance between centers
 	float dist = sqrt( (b1p.x - b2p.x) * (b1p.x - b2p.x) + (b1p.y - b2p.y) * (b1p.y - b2p.y) );
 	float radiiSum = b1r + b2r;
@@ -442,8 +457,11 @@ bool collisionCircle(Vector2f b1p, float b1r, Vector2f b2p, float b2r) {
 	return false;
 }
 
-bool collisionRectangle(Ball *ball, Paddle *paddle) { // checks if a ball and paddle collided
-	// bp is the CENTER position of the circle, pp is the TOP LEFT of the paddle
+/*
+Checks for circle-rectangle collisions for the ball and paddle
+bp is the CENTER position of the circle, pp is the TOP LEFT of the paddle
+*/
+bool collisionRectangle(Ball *ball, Paddle *paddle) {
 	Vector2f bp = ball->getPosition();
 	float br = ball->getRadius();
 	Vector2f pp = paddle->getPosition();
@@ -485,7 +503,10 @@ bool collisionRectangle(Ball *ball, Paddle *paddle) { // checks if a ball and pa
 	}
 }
 
-
+/*
+Main function for SFML Pong
+Set up menu and game objects, run main game loop
+*/
 int main() {
 	RenderWindow window(VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Pong"); // create window
 	window.setVerticalSyncEnabled(true);
@@ -513,19 +534,20 @@ int main() {
 	music.setLoop(true);
 	music.play();
 
-	Clock clock; // init clock
+	// set up frame clock
+	Clock clock;
 	float dt_ms = 0;
 
-	// game and menu booleans
+	// game and menu parameters
 	bool gameOver = false;
 	bool menuChosen = false;
+	int menuChoice = 0;
 
-	// key booleans
+	// key booleans for controls
 	bool upKeyPressed = false;
 	bool downKeyPressed = false;
 	bool wKeyPressed = false;
 	bool sKeyPressed = false;
-	int menuChoice = 0;
 
 	// menu setup
 	sf::Font spacefontloader;
@@ -561,6 +583,7 @@ int main() {
 	menuTextShadow.setFillColor(Color::Red);
 	menuTextShadow.setPosition(Vector2f(WINDOW_WIDTH / 2.0f - 100.0f - 2.0f, WINDOW_HEIGHT / 2.0f - 80.0f - 2.0f));
 
+	// board text setup
 	Text gameOverText;
 	gameOverText.setFont(spacefontloader);
 	gameOverText.setString("");
@@ -575,6 +598,7 @@ int main() {
 	spaceBarText.setCharacterSize(10);
 	spaceBarText.setFillColor(Color::White);
 	
+	// backgrounds setup
 	sf::Texture bg2_texture;
 	if (!bg2_texture.loadFromFile("spacebg.png"))
 	{
@@ -583,7 +607,6 @@ int main() {
 	Sprite backgroundMenu = Sprite(bg2_texture);
 	backgroundMenu.setPosition(0.0f, 0.0f);
 
-	// board setup
 	sf::Texture bg_texture;
 	if (!bg_texture.loadFromFile("spacebg2.png"))
 	{
@@ -591,6 +614,8 @@ int main() {
 	}
 	Sprite backgroundGame = Sprite(bg_texture);
 	backgroundGame.setPosition(0.0f, 0.0f);
+
+	// board setup
 	RectangleShape midLine(Vector2f(5.0f, WINDOW_HEIGHT));
 	midLine.setPosition(Vector2f(WINDOW_WIDTH / 2 - 2.5, 0));
 	midLine.setFillColor(Color(255, 255, 255, 255));
@@ -598,21 +623,22 @@ int main() {
 	// initialize game objects
 	Scoreboard scoreboard(Vector2f(WINDOW_WIDTH / 2, 20.0f));
 	
-	Ball ball1(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f)); // primary ball
+	Ball ball1(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f)); 
 	ball1.setActive(true);
-
 	Ball ball2(Vector2f(-100.0f, 0), Vector2f(0.0f, 0.0f)); // extra balls created by powerups
 	Ball ball3(Vector2f(-100.0f, 0), Vector2f(0.0f, 0.0f));	// set pos and velocity to keep out of way
-
 	Ball balls[3] = {ball1, ball2, ball3}; // add all to array
 
 	Paddle paddleRight(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f)); // set up left and right paddles
 	Paddle paddleLeft(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));				  // start in middle
 
-	PowerUp pu1(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f)); // place powerups
-	PowerUp pu2(0, Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.2f));
+	PowerUp pu1(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.8f)); // place powerups
+	PowerUp pu2(Vector2f(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT * 0.2f));
 	
-	while (window.isOpen()) // GAME LOOP
+	/*
+	Main game loop begins here
+	*/
+	while (window.isOpen())
 	{
 		// frame timing for velocity and position modifications
 		dt_ms = clock.getElapsedTime().asMilliseconds();
@@ -693,7 +719,8 @@ int main() {
 			}
 		}
 		
-		if (menuChosen && !gameOver) { // if game is in progress
+		// if gameplay currently ongoing
+		if (menuChosen && !gameOver) {
 			// update movements of the paddles
 			for (int i = 0; i < 3; i++) { // track first found active ball
 				if (balls[i].isActive()) {
@@ -758,6 +785,7 @@ int main() {
 				}
 			}
 
+			// check if anyone won
 			if (scoreboard.getScores().x >= 5) {
 				gameOver = true;
 				gameOverText.setString("Left player wins");
@@ -783,6 +811,7 @@ int main() {
 
 			// clear to black
 			window.clear(Color(0, 0, 0, 255));
+
 			// draw static board objects
 			window.draw(backgroundGame);
 			window.draw(midLine);
@@ -808,7 +837,8 @@ int main() {
 				pu2.draw(&window);
 			}
 		}
-		else if (menuChosen && gameOver) { // end game, not menu screen
+		// if game is over but we are not on the menu
+		else if (menuChosen && gameOver) {
 			// clear to black
 			window.clear(Color(0, 0, 0, 255));
 			// draw static board objects
@@ -829,11 +859,13 @@ int main() {
 			ball3.setActive(false);
 			pu1.collect(false);
 			pu2.collect(false);
+
 			//return paddles to middle
 			paddleRight.setPosition(Vector2f(WINDOW_WIDTH - 15.0f, WINDOW_HEIGHT / 2.0f - 35.0f));
 			paddleLeft.setPosition(Vector2f(15.0, WINDOW_HEIGHT / 2.0f - 35.0f));
 		}
-		else { // menu screen
+		// if we are on the menu screen
+		else {
 			window.clear(Color(0, 0, 0, 255));
 			window.draw(backgroundMenu);
 			window.draw(titleTextShadow);
@@ -855,9 +887,10 @@ int main() {
 					paddleLeft.setAi(true);
 					paddleRight.setAi(true);
 				}
-				menuChoice = 0;
+				menuChoice = 0; // reset
 			}
 		}
+		// display window in any case
 		window.display();
 	}
 	return 0;
