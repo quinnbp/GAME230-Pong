@@ -1,5 +1,9 @@
 # GAME230-Pong
 
+## Contributors
+
+Quinn Barker-Plummer
+
 ## Description
 
 Space Pong is a C++ clone of the original game Pong, built to learn more about C++ and approach game physics.
