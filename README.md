@@ -1,4 +1,4 @@
-# GAME230-Pong
+# Space Pong
 
 ## Contributors
 
